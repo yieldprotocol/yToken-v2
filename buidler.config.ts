@@ -20,6 +20,7 @@ export default {
         artifacts: "./build",
         coverage: "./coverage",
         coverageJson: "./coverage.json",
+        sources: "./contracts/core" 
     },
     networks: {
         coverage: {
