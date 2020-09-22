@@ -2,6 +2,8 @@
 pragma solidity ^0.6.10;
 
 import "@openzeppelin/contracts/math/Math.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "./interfaces/ComptrollerInterface.sol";
 import "./interfaces/CTokenInterfaces.sol";
 import "./interfaces/IDai.sol";
 import "./helpers/DecimalMath.sol";
@@ -15,17 +17,31 @@ import "./helpers/Orchestrated.sol";
  */
 contract Treasury is Orchestrated(), DecimalMath {
 
-    // TODO: Consider having a mapping of accepted token/cToken pairs, and pre-approving all transfers
+    ComptrollerInterface public comptroller;
+
+    mapping(address => IERC20) public underlyings;
+    mapping(address => ICERC20Token) public cTokens;
+
+    constructor(address comptroller_, address[] memory cTokens_) public {
+        comptroller = ComptrollerInterface(comptroller_);
+        comptroller.enterMarkets(cTokens_); // This takes care of being valid cTokens
+        
+        for (uint256 i = 0; i < cTokens_.length; i += 1) {
+            ICERC20Token _cToken = ICERC20Token(cTokens_[i]);
+            address underlying = _cToken.underlying();
+            underlyings[cTokens_[i]] = IERC20(underlying);
+            cTokens[underlying] = _cToken;    
+        }
+    }
 
     /// @dev Grab an ERC20 from the client and use it to mint cToken for the Treasury
-    function pushUnderlying(address underlying, address cToken, address from, uint256 amount)
+    function pushUnderlying(address underlying, address from, uint256 amount)
         public
         onlyOrchestrated("Treasury: Not Authorized")
     {
-        ICERC20Token _cToken = ICERC20Token(cToken);
-        require(_cToken.underlying() == underlying, "Treasury: Not a valid pair");
-        require(IERC20(underlying).transferFrom(from, address(this), amount));  // Take underlying from user to Treasury
-        _cToken.mint(amount);
+        // Check a valid underlying
+        require(IERC20(underlying).transferFrom(from, address(this), amount), "Treasury: Transfer fail");  // Take underlying from user to Treasury
+        cTokens[underlying].mint(amount);
     }
 
     /// @dev Grab a cToken from the client and keep it in the Treasury
@@ -33,21 +49,22 @@ contract Treasury is Orchestrated(), DecimalMath {
         public
         onlyOrchestrated("Treasury: Not Authorized")
     {
+        // Check a valid cToken
         ICERC20Token _cToken = ICERC20Token(cToken);
         _cToken.transferFrom(from, address(this), amount);
         _cToken.redeemUnderlying(amount); // TODO: The parameter is in Dai or cDai? Is it the same?
     }
 
     /// @dev Redeem a cERC20 from the Treasury and return the underlying to the client
-    function pullUnderlying(address cToken, address to, uint256 amount)
+    function pullUnderlying(address underlying, address to, uint256 amount)
         public
         onlyOrchestrated("Treasury: Not Authorized")
     {
         // TODO: Consider a reverse search, so that the underlying is passed as a paraeter and not the cToken
-        ICERC20Token _cToken = ICERC20Token(cToken);
-        IERC20 underlying = IERC20(_cToken.underlying());
+        ICERC20Token _cToken = cTokens[underlying];
+        IERC20 _underlying = IERC20(underlying);
         _cToken.redeemUnderlying(amount); // TODO: The parameter is in Dai or cDai? Is it the same?
-        require(underlying.transfer(to, amount));
+        require(_underlying.transfer(to, amount));
     }
 
     /// @dev Transfer a cToken from the Treasury to the client
@@ -55,21 +72,7 @@ contract Treasury is Orchestrated(), DecimalMath {
         public
         onlyOrchestrated("Treasury: Not Authorized")
     {
-        // If there aren't enough cToken this will fail. That is fine. Try executing `balanceHoldings(cToken1, cToken2)`
+        // TODO: Borrow if needed
         require(ICERC20Token(cToken).transfer(to, amount));
-    }
-
-    /// @dev Evaluate if some cToken1 could be converted to cToken2, and do it if appropriate
-    function balanceHoldings(address cToken1, address cToken2)
-        external
-    {
-        // Calculate surplus of cToken1
-        // Calculate surplus of cToken2
-        // Buy cToken2 in Uniswap with cToken1
-        // Refund gas cost with some Token1
-
-        // or
-
-        // Borrow Token2 with cToken1, mint cToken2. Keep track of Treasury debt and act accordingly. Ugh.
     }
 }
