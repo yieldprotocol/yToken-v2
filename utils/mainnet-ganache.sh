@@ -13,5 +13,6 @@ npx ganache-cli \
     --gasLimit 0xfffffffffff \
     --gasPrice 0 \
     --port 8545 \
-    --networkId 5777 \
-    --host 0.0.0.0 &
+    --networkId 1 \
+    --host 0.0.0.0 \
+    --fork https://mainnet.infura.io/v3/`cat .infuraKey` &
