@@ -84,25 +84,4 @@ export function divrupRay(x: BigNumberish, ray: BigNumberish): BigNumber {
   return z
 }
 
-export const CHAI = formatBytes32String('CHAI')
-export const WETH = formatBytes32String('ETH-A')
-export const INVALID_COLLATERAL = formatBytes32String('INVALID')
-export const Line = formatBytes32String('Line')
-export const spotName = formatBytes32String('spot')
-export const linel = formatBytes32String('line')
-
 const UNIT: BigNumber = BigNumber.from(10).pow(BigNumber.from(27))
-
-export const limits = toRad(10000)
-
-export const spot = toRay(260) // At the time of writing, spot is 259.625048333333333333333333333, a reasonable range is [50, 1000]
-export const chi1 = toRay(1.01) // At the time of writing, chi is 1.018008449363110619399951035, a reasonable upper boundary is 1.2
-export const rate1 = toRay(1.02) // At the time of writing, rate is 1.020041883692153436559184034, a reasonable upper boundary is 1.2
-export const precision = 10 // Loss in wei that is tolerated with each operation
-
-export const daiDebt1 = toWad(120).toString()
-export const daiTokens1 = mulRay(daiDebt1, rate1).toString()
-export const wethTokens1 = divRay(daiTokens1, spot).toString()
-export const chaiTokens1 = divRay(daiTokens1, chi1).toString()
-export const tag = divRay(toRay(1.0), spot)
-export const fix = divRay(toRay(1.0), mulRay(spot, toRay(1.1)))

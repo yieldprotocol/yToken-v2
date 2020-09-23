@@ -1,4 +1,5 @@
 const Migrations = artifacts.require('Migrations')
+const Dai = artifacts.require('Dai')
 const WETH9 = artifacts.require('WETH9')
 const Comptroller = artifacts.require('Comptroller')
 const WhitePaperInterestRateModel = artifacts.require('WhitePaperInterestRateModel')

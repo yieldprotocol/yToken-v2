@@ -1,111 +1,89 @@
-import { formatBytes32String as toBytes32, id } from 'ethers/lib/utils'
-import { BigNumber, BigNumberish } from 'ethers'
+// import { formatBytes32String as toBytes32, id } from 'ethers/lib/utils'
+// import { BigNumber, BigNumberish } from 'ethers'
 
 export type Contract = any
 
-const Vat = artifacts.require('Vat')
-const GemJoin = artifacts.require('GemJoin')
-const DaiJoin = artifacts.require('DaiJoin')
-const Weth = artifacts.require('WETH9')
+const WETH9 = artifacts.require('WETH9')
 const Dai = artifacts.require('Dai')
-const Pot = artifacts.require('Pot')
-const End = artifacts.require('End')
-const Chai = artifacts.require('Chai')
-const Treasury = artifacts.require('Treasury')
-const EDai = artifacts.require('EDai')
-const Controller = artifacts.require('Controller')
-const Liquidations = artifacts.require('Liquidations')
-const Unwind = artifacts.require('Unwind')
+const Comptroller = artifacts.require('Comptroller')
+const WhitePaperInterestRateModel = artifacts.require('WhitePaperInterestRateModel')
+const CErc20 = artifacts.require('CErc20')
 
 import {
-  WETH,
-  CHAI,
-  Line,
-  spotName,
-  linel,
-  limits,
-  spot,
-  rate1,
-  chi1,
-  tag,
-  fix,
-  toRay,
-  subBN,
-  divRay,
-  divrupRay,
-  mulRay,
+  toWad,
+  MAX,
 } from './utils'
 
-export class MakerEnvironment {
-  vat: Contract
-  weth: Contract
-  wethJoin: Contract
-  dai: Contract
-  daiJoin: Contract
-  chai: Contract
-  pot: Contract
-  end: Contract
+export class CompoundEnvironment {
+  weth : Contract
+  dai : Contract
+  comptroller: Contract
+  cWeth: Contract
+  cDai: Contract
 
   constructor(
-    vat: Contract,
-    weth: Contract,
-    wethJoin: Contract,
-    dai: Contract,
-    daiJoin: Contract,
-    chai: Contract,
-    pot: Contract,
-    end: Contract
+    weth : Contract,
+    dai : Contract,
+    comptroller: Contract,
+    cWeth: Contract,
+    cDai: Contract,
   ) {
-    this.vat = vat
     this.weth = weth
-    this.wethJoin = wethJoin
     this.dai = dai
-    this.daiJoin = daiJoin
-    this.chai = chai
-    this.pot = pot
-    this.end = end
+    this.comptroller = comptroller
+    this.cWeth = cWeth
+    this.cDai = cDai
   }
 
   public static async setup() {
-    // Set up vat, join and weth
-    const vat = await Vat.new()
-    await vat.init(WETH) // Set WETH rate to 1.0
 
-    const weth = await Weth.new()
-    const wethJoin = await GemJoin.new(vat.address, WETH, weth.address)
-
+    const weth = await WETH9.new()
     const dai = await Dai.new(31337) // Dai.sol takes the chainId
-    const daiJoin = await DaiJoin.new(vat.address, dai.address)
+    const comptroller = await Comptroller.new()
+    await comptroller._setMaxAssets(MAX)
 
-    // Setup vat
-    await vat.file(WETH, spotName, spot)
-    await vat.file(WETH, linel, limits)
-    await vat.file(Line, limits)
-    await vat.fold(WETH, vat.address, subBN(rate1, toRay(1))) // Fold only the increase from 1.0
+    const cTokenConfig : any = {
+      // ERC20, baseRatePerYear, multiplierPerYear, initialExchangeRate
+      cWeth: {
+        cToken: null,
+        underlying: weth,
+        baseRatePerYear: toWad(1.01),
+        multiplierPerYear: toWad(1.02),
+        initialExchangeRate: toWad(1.03),
+      },
+      cDai: {
+        cToken: null,
+        underlying: dai,
+        baseRatePerYear: toWad(1.04),
+        multiplierPerYear: toWad(1.05),
+        initialExchangeRate: toWad(1.06),
+      },
+    }
 
-    // Setup pot
-    const pot = await Pot.new(vat.address)
-    await pot.setChi(chi1)
+    for (let name in cTokenConfig) {
+      const interestRateModel = await WhitePaperInterestRateModel.new(
+        cTokenConfig[name].baseRatePerYear,
+        cTokenConfig[name].multiplierPerYear,
+      )
 
-    // Setup chai
-    const chai = await Chai.new(vat.address, pot.address, daiJoin.address, dai.address)
+      const cToken = await CErc20.new()
+      await cToken.initialize(
+        cTokenConfig[name].underlying.address,
+        comptroller.address,
+        interestRateModel.address,
+        cTokenConfig[name].initialExchangeRate,
+        name,
+        name,
+        18,
+      )
+      cTokenConfig[name].cToken = cToken
+      await comptroller._supportMarket(cTokenConfig[name].cToken.address)
+    }
 
-    // Setup end
-    const end = await End.new()
-    await end.file(toBytes32('vat'), vat.address)
-
-    // Permissions
-    await vat.rely(vat.address)
-    await vat.rely(wethJoin.address)
-    await vat.rely(daiJoin.address)
-    await vat.rely(pot.address)
-    await vat.rely(end.address)
-    await dai.rely(daiJoin.address)
-
-    return new MakerEnvironment(vat, weth, wethJoin, dai, daiJoin, chai, pot, end)
+    return new CompoundEnvironment(weth, dai, comptroller, cTokenConfig.cWeth.cToken, cTokenConfig.cDai.cToken)
   }
 
-  public async getDai(user: string, _daiTokens: BigNumberish, _rate: BigNumberish) {
+  /* public async getDai(user: string, _daiTokens: BigNumberish, _rate: BigNumberish) {
     await this.vat.hope(this.daiJoin.address, { from: user })
     await this.vat.hope(this.wethJoin.address, { from: user })
 
@@ -210,10 +188,10 @@ export class YieldEnvironmentLite {
   public async unlockedOf(collateral: string, user: string): Promise<BigNumberish> {
     const debt = await this.controller.totalDebtDai(collateral, user)
     return (await this.controller.powerOf(collateral, user)).sub(debt)
-  }
+  } */
 }
 
-export class YieldEnvironment extends YieldEnvironmentLite {
+/* export class YieldEnvironment extends YieldEnvironmentLite {
   liquidations: Contract
   unwind: Contract
 
@@ -264,4 +242,4 @@ export class YieldEnvironment extends YieldEnvironmentLite {
     await this.unwind.settleTreasury()
     await this.unwind.cashSavings()
   }
-}
+} */
