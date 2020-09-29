@@ -6,6 +6,7 @@ export type Contract = any
 const WETH9 = artifacts.require('WETH9')
 const Dai = artifacts.require('Dai')
 const Comptroller = artifacts.require('Comptroller')
+const SimplePriceOracle = artifacts.require('SimplePriceOracle')
 const WhitePaperInterestRateModel = artifacts.require('WhitePaperInterestRateModel')
 const CErc20 = artifacts.require('CErc20')
 
@@ -18,6 +19,7 @@ export class CompoundEnvironment {
   weth : Contract
   dai : Contract
   comptroller: Contract
+  oracle: Contract
   cWeth: Contract
   cDai: Contract
 
@@ -25,12 +27,14 @@ export class CompoundEnvironment {
     weth : Contract,
     dai : Contract,
     comptroller: Contract,
+    oracle: Contract,
     cWeth: Contract,
     cDai: Contract,
   ) {
     this.weth = weth
     this.dai = dai
     this.comptroller = comptroller
+    this.oracle = oracle
     this.cWeth = cWeth
     this.cDai = cDai
   }
@@ -41,6 +45,8 @@ export class CompoundEnvironment {
     const dai = await Dai.new(31337) // Dai.sol takes the chainId
     const comptroller = await Comptroller.new()
     await comptroller._setMaxAssets(MAX)
+    const oracle = await SimplePriceOracle.new()
+    await comptroller._setPriceOracle(oracle.address)
 
     const cTokenConfig : any = {
       // ERC20, baseRatePerYear, multiplierPerYear, initialExchangeRate
@@ -50,13 +56,15 @@ export class CompoundEnvironment {
         baseRatePerYear: toWad(1.01),
         multiplierPerYear: toWad(1.02),
         initialExchangeRate: toWad(1.03),
+        price: toWad(1.04),
       },
       cDai: {
         cToken: null,
         underlying: dai,
-        baseRatePerYear: toWad(1.04),
-        multiplierPerYear: toWad(1.05),
-        initialExchangeRate: toWad(1.06),
+        baseRatePerYear: toWad(1.01),
+        multiplierPerYear: toWad(1.02),
+        initialExchangeRate: toWad(1.03),
+        price: toWad(1.04),
       },
     }
 
@@ -78,9 +86,10 @@ export class CompoundEnvironment {
       )
       cTokenConfig[name].cToken = cToken
       await comptroller._supportMarket(cTokenConfig[name].cToken.address)
+      await oracle.setUnderlyingPrice(cTokenConfig[name].cToken.address, cTokenConfig[name].price)
     }
 
-    return new CompoundEnvironment(weth, dai, comptroller, cTokenConfig.cWeth.cToken, cTokenConfig.cDai.cToken)
+    return new CompoundEnvironment(weth, dai, comptroller, oracle, cTokenConfig.cWeth.cToken, cTokenConfig.cDai.cToken)
   }
 
   /* public async getDai(user: string, _daiTokens: BigNumberish, _rate: BigNumberish) {
