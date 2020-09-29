@@ -1,13 +1,13 @@
 const Treasury = artifacts.require('Treasury')
 
 // @ts-ignore
-import { expectRevert } from '@openzeppelin/test-helpers'
-import { assert } from 'chai'
+import { BN, expectRevert } from '@openzeppelin/test-helpers'
 import { id } from 'ethers/lib/utils'
 import { CompoundEnvironment, Contract } from '../utils/fixtures'
 import {
   toWad,
   MAX,
+  ZERO,
   addBN,
   subBN,
   mulRay,
@@ -88,12 +88,57 @@ contract('Treasury - Lending', async (accounts: string[]) => {
 
   it('pushes underlying', async () => {
     await treasury.pushUnderlying(dai.address, user, toWad(100), { from: user })
-    console.log((await dai.balanceOf(treasury.address)).toString())
-    console.log((await cDai.balanceOf(treasury.address)).toString())
+    const treasuryDai = await dai.balanceOf(treasury.address)
+    const treasuryCDai = await cDai.balanceOf(treasury.address)
+    // TODO: Code in javascript the Underlying -> CToken formula
+    expect(treasuryDai).to.be.bignumber.eq(ZERO)
+    expect(treasuryCDai).to.be.bignumber.gt(ZERO)
 
     await treasury.pushUnderlying(weth.address, user, toWad(2), { from: user })
-    console.log((await weth.balanceOf(treasury.address)).toString())
-    console.log((await cWeth.balanceOf(treasury.address)).toString())
+    const treasuryWeth = await weth.balanceOf(treasury.address)
+    const treasuryCWeth = await cWeth.balanceOf(treasury.address)
+    expect(treasuryWeth).to.be.bignumber.eq(ZERO)
+    expect(treasuryCWeth).to.be.bignumber.gt(ZERO)
+  })
+
+  describe('with positive underlying', () => {
+    beforeEach(async () => {
+      await treasury.pushUnderlying(dai.address, user, toWad(100), { from: user })
+      await treasury.pushUnderlying(weth.address, user, toWad(2), { from: user })
+    })
+
+    it('pulls underlying', async () => {
+      // Dai
+
+      const treasuryCDaiInDai = await cDai.balanceOfUnderlying.call(treasury.address) // Returns one wei less than pushed
+      const treasuryCDaiBefore = await cDai.balanceOf(treasury.address)
+      const userDaiBefore = await dai.balanceOf(user)
+      
+      await treasury.pullUnderlying(dai.address, user, treasuryCDaiInDai, { from: user })
+      
+      const treasuryCDaiAfter = await cDai.balanceOf(treasury.address)
+      const userDaiAfter = await dai.balanceOf(user)
+      
+      // TODO: Code in javascript the Underlying -> CToken formula
+      expect(treasuryCDaiAfter).to.be.bignumber.lt(treasuryCDaiBefore)
+      expect(userDaiAfter).to.be.bignumber.gt(userDaiBefore)
+
+      // Weth
+
+      const treasuryCWethInWeth = await cWeth.balanceOfUnderlying.call(treasury.address) // Returns one wei less than pushed
+      const treasuryCWethBefore = await cWeth.balanceOf(treasury.address)
+      const userWethBefore = await weth.balanceOf(user)
+      
+      await treasury.pullUnderlying(weth.address, user, treasuryCWethInWeth, { from: user })
+      
+      const treasuryCWethAfter = await cWeth.balanceOf(treasury.address)
+      const userWethAfter = await weth.balanceOf(user)
+      
+      // TODO: Code in javascript the Underlying -> CToken formula
+      expect(treasuryCWethAfter).to.be.bignumber.lt(treasuryCWethBefore)
+      expect(userWethAfter).to.be.bignumber.gt(userWethBefore)
+
+    })
   })
 
   /*

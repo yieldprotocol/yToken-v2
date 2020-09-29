@@ -75,7 +75,7 @@ contract Treasury is Orchestrated(), DecimalMath {
     {
         ICERC20Token _cToken = cTokens[underlying];
         IERC20 _underlying = IERC20(underlying);
-        _cToken.redeemUnderlying(amount); // TODO: The parameter is in Dai or cDai? Is it the same?
+        _cToken.redeemUnderlying(amount); // The parameter is in Dai
         require(_underlying.transfer(to, amount), "Treasury: Transfer fail");
     }
 
